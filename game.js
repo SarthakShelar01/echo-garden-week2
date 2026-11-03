@@ -1,0 +1,34 @@
+'use strict';
+const {Game,LEVELS,LIMIT}=EchoGarden;
+const game=new Game();
+const $=id=>document.getElementById(id);
+const canvas=$('board'),ctx=canvas.getContext('2d');
+const ARROWS={up:'↑',right:'→',down:'↓',left:'←',wait:'•'};
+let progress={},storageOK=true;
+try{const saved=JSON.parse(localStorage.getItem('echo-garden-v1')||'{}');for(const [k,v]of Object.entries(saved)){if(LEVELS[k]&&Number.isFinite(v))progress[k]=v;}}catch{storageOK=false;}
+function save(){try{localStorage.setItem('echo-garden-v1',JSON.stringify(progress));}catch{storageOK=false;}}
+function round(x,y,w,h,r,fill,stroke){ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=2;ctx.stroke();}}
+function robot(p,ghost,cell,ox,oy){if(!p)return;const x=ox+p.x*cell,y=oy+p.y*cell;ctx.save();if(ghost){ctx.setLineDash([5,4]);round(x+cell*.17,y+cell*.16,cell*.66,cell*.67,cell*.16,'#d2eeeb99','#27867b');ctx.setLineDash([]);}else{round(x+cell*.15,y+cell*.18,cell*.7,cell*.62,cell*.14,'#fcf9e9','#284d3a');round(x+cell*.24,y+cell*.32,cell*.52,cell*.25,cell*.08,'#285342');ctx.fillStyle='#cde4b1';ctx.fillRect(x+cell*.34,y+cell*.4,cell*.06,cell*.06);ctx.fillRect(x+cell*.58,y+cell*.4,cell*.06,cell*.06);ctx.strokeStyle='#365e3e';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x+cell*.5,y+cell*.18);ctx.lineTo(x+cell*.5,y+cell*.04);ctx.stroke();ctx.fillStyle='#83a55f';ctx.beginPath();ctx.ellipse(x+cell*.56,y+cell*.05,cell*.1,cell*.04,-.5,0,Math.PI*2);ctx.fill();}ctx.restore();}
+function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);const rows=game.map.length,cols=game.map[0].length;const cell=Math.min((canvas.width-80)/cols,(canvas.height-70)/rows),ox=(canvas.width-cols*cell)/2,oy=(canvas.height-rows*cell)/2;
+ for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){const t=game.map[y][x],a=ox+x*cell,b=oy+y*cell;
+  round(a+2,b+2,cell-4,cell-4,5,t==='#'?'#728570':game.complete?'#dce7ca':'#e2e2cf');
+  if(t==='#'){ctx.fillStyle='#8c9d80';ctx.beginPath();ctx.ellipse(a+cell*.4,b+cell*.4,cell*.17,cell*.09,-.6,0,Math.PI*2);ctx.fill();ctx.fillStyle='#50694f';ctx.fillRect(a+cell*.25,b+cell*.7,cell*.45,2);}
+  if(t==='S'){const open=game.gateOpen();round(a+cell*.14,b+cell*.14,cell*.72,cell*.72,8,open?'#c4d99b':'#f0cf7a','#a78b3c');ctx.fillStyle='#735f26';ctx.font=`${cell*.37}px Georgia`;ctx.textAlign='center';ctx.fillText('☀',a+cell/2,b+cell*.64);}
+  if(t==='G'){const open=game.gateOpen();round(a+5,b+5,cell-10,cell-10,6,open?'#d5e5bc':'#b38d48');ctx.strokeStyle=open?'#759c55':'#715b31';ctx.lineWidth=4;for(let i=0;i<3;i++){ctx.beginPath();ctx.moveTo(a+cell*(.3+i*.2),b+cell*(open?.7:.15));ctx.lineTo(a+cell*(.3+i*.2),b+cell*.85);ctx.stroke();}}
+  if(t==='T'){round(a+cell*.14,b+cell*.14,cell*.72,cell*.72,8,game.complete?'#5c986e':'#679b9a');ctx.fillStyle='#f8f5d7';ctx.font=`${cell*.4}px Georgia`;ctx.textAlign='center';ctx.fillText('✦',a+cell/2,b+cell*.65);}
+ }
+ if(game.snapshot&&game.commands.length){let p={...game.snapshot};ctx.strokeStyle='#2b887d';ctx.lineWidth=3;ctx.setLineDash([6,6]);ctx.beginPath();ctx.moveTo(ox+(p.x+.5)*cell,oy+(p.y+.5)*cell);for(const c of game.commands){p=game.move(p,c,false);ctx.lineTo(ox+(p.x+.5)*cell,oy+(p.y+.5)*cell);}ctx.stroke();ctx.setLineDash([]);}
+ robot(game.echo,true,cell,ox,oy);robot(game.player,false,cell,ox,oy);
+ if(game.echo&&game.echo.x===game.player.x&&game.echo.y===game.player.y){ctx.strokeStyle='#27867b';ctx.setLineDash([5,4]);ctx.lineWidth=3;ctx.strokeRect(ox+game.player.x*cell+4,oy+game.player.y*cell+4,cell-8,cell-8);ctx.setLineDash([]);}
+}
+function render(){const l=LEVELS[game.level];$('room-number').textContent='TERRACE 0'+(game.level+1);$('room-title').textContent=l.name;$('room-subtitle').textContent=l.subtitle;$('mode').textContent=game.complete?'RESTORED':game.mode.toUpperCase();$('status').textContent=game.note;$('turns').textContent=game.turns;$('resets').textContent=game.resets;$('progress').textContent=Object.keys(progress).length+' / 3';$('hint').textContent=l.hint;
+ $('memory-help').textContent=!l.echo?'First, get to know Pip. Walk to the water terminal and activate it.':game.mode==='recording'?'Every move becomes a memory. Finish to rewind Pip to the start.':'Record up to eight commands. Your Echo replays them, then holds its last position.';
+ $('trail').replaceChildren();for(let i=0;i<LIMIT;i++){const li=document.createElement('li');li.dataset.step=i+1;li.textContent=ARROWS[game.commands[i]]||'·';li.className=!game.commands[i]?'empty':game.mode==='replay'&&i<game.index?'played':'';$('trail').append(li);}
+ $('record').disabled=!l.echo||game.complete||game.mode==='replay';$('record').innerHTML=(game.mode==='recording'?'Finish recording':game.mode==='replay'?'Echo is replaying':'Start recording')+' <kbd>E</kbd>';
+ $('save-note').textContent=storageOK?'Completed rooms save on this browser when storage is available.':'Browser storage is unavailable. You can still play; progress lasts for this session.';
+ $('levels').replaceChildren();LEVELS.forEach((l,i)=>{const b=document.createElement('button');b.setAttribute('aria-current',String(i===game.level));b.innerHTML='<span class="num">0'+(i+1)+'</span>'+l.name+(progress[i]?' ✓':'');b.onclick=()=>{if($('done').open)$('done').close();game.load(i);render();};$('levels').append(b);});draw();}
+function act(command){if($('done').open)return;if(command==='record')game.record();else if(command==='reset')game.reset();else if(command==='activate'){if(game.interact()){progress[game.level]=Math.max(progress[game.level]||0,game.score());save();$('done-title').textContent=game.level===2?'The rooftop is waking up.':'Water finds its way.';$('done-copy').textContent='Terrace '+(game.level+1)+' restored in '+game.turns+' turns with '+game.resets+' resets.';$('score').textContent=game.score()+' restoration points';$('next').textContent=game.level===2?'Back to the first terrace →':'Next terrace →';$('done').showModal();}}else game.step(command);render();}
+$('record').onclick=()=>act('record');$('reset').onclick=()=>act('reset');$('activate').onclick=()=>act('activate');document.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>act(b.dataset.move));$('next').onclick=()=>{$('done').close();game.load((game.level+1)%LEVELS.length);render();};$('replay').onclick=()=>{$('done').close();game.reset();render();};
+const KEYS={ArrowUp:'up',w:'up',ArrowRight:'right',d:'right',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',' ':'wait',e:'record',r:'reset',Backspace:'reset',Enter:'activate'};
+document.addEventListener('keydown',ev=>{if($('done').open||ev.ctrlKey||ev.metaKey||ev.altKey)return;const tag=ev.target.tagName;if(['INPUT','TEXTAREA','SELECT','SUMMARY'].includes(tag)||((tag==='BUTTON')&&(ev.key==='Enter'||ev.key===' ')))return;const k=KEYS[ev.key]||KEYS[ev.key.toLowerCase()];if(k){ev.preventDefault();if(!ev.repeat)act(k);}});
+render();
